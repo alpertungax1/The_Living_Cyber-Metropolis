@@ -1,0 +1,70 @@
+/* Custom Styles for Technocore Work Graph Bento & Isometric Cyberpunk Dashboard */
+
+@layer base {
+  body {
+    background-color: #060911;
+    color: #f8fafc;
+    overflow-x: hidden;
+  }
+}
+
+/* Pixel Art Rendering */
+.image-pixelated {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Bento Card surface & subtle hover glow */
+.bento-card {
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bento-card:hover {
+  border-color: rgba(0, 242, 254, 0.35);
+  box-shadow: 0 10px 35px rgba(0, 242, 254, 0.08);
+}
+
+/* CRT Screen Effect */
+.crt-frame {
+  position: relative;
+  background: #050811;
+  box-shadow: inset 0 0 40px rgba(0, 242, 254, 0.15), 0 0 30px rgba(0, 242, 254, 0.25);
+}
+
+.crt-scanline {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.04), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.04));
+  background-size: 100% 3px, 3px 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.8);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 242, 254, 0.5);
+}
+
+/* Toast Animation */
+.toast-show {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  transform: translateY(0);
+}
