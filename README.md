@@ -1,3 +1,13 @@
+---
+title: The Living Cyber-Metropolis
+emoji: 🌆
+colorFrom: blue
+colorTo: purple
+sdk: gradio
+app_file: app.py
+pinned: false
+---
+
 # 🌆 Technocore Work Graph: The Living Cyber-Metropolis (`twg1`)
 
 [![Protocol](https://img.shields.io/badge/protocol-twg1-00f2fe.svg)](spec.md)
