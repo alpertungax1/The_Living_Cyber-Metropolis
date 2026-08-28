@@ -107,11 +107,12 @@ class PixelAgent {
     this.item = Math.random() > 0.4 ? (Math.random() > 0.5 ? 'briefcase' : 'laptop') : 'none';
 
     // Spread agents around city walkways
+    // Dynamic, lively walking speed across grid
     this.gridX = 14 + (Math.random() * 12 - 6);
     this.gridY = 14 + (Math.random() * 12 - 6);
-    this.targetGridX = this.gridX;
-    this.targetGridY = this.gridY;
-    this.speed = 0.028 + Math.random() * 0.02;
+    this.targetGridX = this.gridX + (Math.random() * 6 - 3);
+    this.targetGridY = this.gridY + (Math.random() * 6 - 3);
+    this.speed = 0.065 + Math.random() * 0.04;
 
     this.state = 'wandering';
     this.insideBuilding = null;
@@ -122,7 +123,7 @@ class PixelAgent {
     this.walkCycle = Math.random() * 10;
     this.facing = Math.random() > 0.5 ? 1 : -1;
     this.speechBubble = null;
-    this.actionTimer = Math.floor(Math.random() * 100);
+    this.actionTimer = Math.floor(Math.random() * 30);
   }
 
   generatePalette(seedStr) {
@@ -154,15 +155,15 @@ class PixelAgent {
   update(city) {
     // Inside building state
     if (this.state === 'inside_building') {
-      this.opacity = Math.max(0, this.opacity - 0.05);
+      this.opacity = Math.max(0, this.opacity - 0.08);
       this.insideTimer--;
       if (this.insideTimer <= 0) {
         this.state = 'wandering';
         if (this.insideBuilding) {
           this.gridX = this.insideBuilding.doorGx;
           this.gridY = this.insideBuilding.doorGy;
-          this.targetGridX = this.gridX + (Math.random() * 3 - 1.5);
-          this.targetGridY = this.gridY + (Math.random() * 3 - 1.5);
+          this.targetGridX = this.gridX + (Math.random() * 6 - 3);
+          this.targetGridY = this.gridY + (Math.random() * 6 - 3);
         }
         city.sound.playDoor();
         this.item = Math.random() > 0.4 ? 'briefcase' : 'laptop';
@@ -171,7 +172,7 @@ class PixelAgent {
     }
 
     if (this.state === 'going_to_door') {
-      this.opacity = Math.min(1.0, this.opacity + 0.05);
+      this.opacity = Math.min(1.0, this.opacity + 0.08);
     } else {
       this.opacity = 1.0;
     }
@@ -197,31 +198,34 @@ class PixelAgent {
         } else if (!city.isTileSolid(this.gridX, nextY, this.insideBuilding)) {
           this.gridY = nextY;
         } else {
-          this.targetGridX = 14 + (Math.random() * 12 - 6);
-          this.targetGridY = 14 + (Math.random() * 12 - 6);
+          this.targetGridX = 14 + (Math.random() * 14 - 7);
+          this.targetGridY = 14 + (Math.random() * 14 - 7);
         }
       }
 
-      this.walkCycle += 0.22;
+      this.walkCycle += 0.35;
       this.facing = dx >= 0 ? 1 : -1;
     } else {
+      // Reached destination
       if (this.state === 'going_to_door' && this.insideBuilding) {
         this.state = 'inside_building';
-        this.insideTimer = 160 + Math.floor(Math.random() * 140);
+        this.insideTimer = 80 + Math.floor(Math.random() * 70); // 1.5 - 2.5s
         city.sound.playDoor();
       } else {
+        // Quick wander cycle: pick next destination promptly
         this.actionTimer++;
-        if (this.actionTimer > 180 && Math.random() < 0.02) {
+        if (this.actionTimer > 25 && Math.random() < 0.15) {
           this.actionTimer = 0;
-          if (city && city.buildings.length > 0 && Math.random() < 0.5) {
+          if (city && city.buildings.length > 0 && Math.random() < 0.6) {
             const bldg = city.buildings[Math.floor(Math.random() * Math.min(city.buildings.length, 5))];
             this.insideBuilding = bldg;
             this.state = 'going_to_door';
             this.targetGridX = bldg.doorGx;
             this.targetGridY = bldg.doorGy;
           } else {
-            this.targetGridX = 14 + (Math.random() * 14 - 7);
-            this.targetGridY = 14 + (Math.random() * 14 - 7);
+            this.state = 'wandering';
+            this.targetGridX = 14 + (Math.random() * 16 - 8);
+            this.targetGridY = 14 + (Math.random() * 16 - 8);
           }
         }
       }
@@ -739,7 +743,8 @@ class IsometricCity {
     const s = this.scale * 1.5;
     const x = pos.x;
     const y = pos.y;
-    const bob = Math.sin(agent.walkCycle) * 2 * s;
+    const isMoving = agent.state !== 'inside_building';
+    const bob = isMoving ? Math.abs(Math.sin(agent.walkCycle)) * 2.5 * s : 0;
 
     this.ctx.save();
     this.ctx.globalAlpha = agent.opacity;
@@ -747,14 +752,21 @@ class IsometricCity {
     // Shadow
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
     this.ctx.beginPath();
-    this.ctx.ellipse(x, y, 7 * s, 3.5 * s, 0, 0, Math.PI * 2);
+    this.ctx.ellipse(x, y, (7 + (isMoving ? Math.sin(agent.walkCycle) * 0.8 : 0)) * s, 3.5 * s, 0, 0, Math.PI * 2);
     this.ctx.fill();
 
-    // Legs
-    const legOffset = Math.sin(agent.walkCycle) * 3 * s;
+    // Legs with clear dynamic walking swing
+    const legSwing = Math.sin(agent.walkCycle) * 4.5 * s;
     this.ctx.fillStyle = agent.palette.pants;
-    this.ctx.fillRect(x - 3 * s, y - 8 * s + bob, 2.5 * s, 6 * s + legOffset);
-    this.ctx.fillRect(x + 0.5 * s, y - 8 * s + bob, 2.5 * s, 6 * s - legOffset);
+    this.ctx.fillRect(x - 3 * s, y - 8 * s + bob, 2.5 * s, 6 * s + legSwing);
+    this.ctx.fillRect(x + 0.5 * s, y - 8 * s + bob, 2.5 * s, 6 * s - legSwing);
+
+    // Subtle neon step ripple when walking fast
+    if (agent.isSigned && Math.random() < 0.1) {
+      this.ctx.strokeStyle = 'rgba(0, 242, 254, 0.3)';
+      this.ctx.lineWidth = 1;
+      this.ctx.strokeRect(x - 4 * s, y - 2 * s, 8 * s, 2 * s);
+    }
 
     // Torso
     this.ctx.fillStyle = agent.palette.shirt;
