@@ -227,8 +227,8 @@ class NetworkObserver:
                 for r in room_nodes[:10]
             ]
 
-            total_dids = max(len(agent_nodes), len(self.state_mgr.local_state.get("active_dids", [])))
-            total_rooms = max(len(room_nodes), len(self.discovered_rooms))
+            total_dids = max(len(agent_nodes), len(self.state_mgr.state.get("known_dids", [])))
+            total_rooms = max(len(room_nodes), len(self.state_mgr.state.get("known_rooms", [])))
             births_count = max(len(self.room_creations), len(self.recent_room_births))
 
             return {
