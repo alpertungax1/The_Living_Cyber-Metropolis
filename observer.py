@@ -227,12 +227,18 @@ class NetworkObserver:
                 for r in room_nodes[:10]
             ]
 
-            total_msgs = max(self.total_messages, self.state_mgr.state.get("total_messages_processed", 0))
-            signed_msgs = max(self.signed_count, total_msgs)
-            total_dids = max(len(agent_nodes), len(self.state_mgr.state.get("known_dids", [])), int(total_msgs * 0.8) if total_msgs > 0 else 0)
-            total_rooms = max(len(room_nodes), len(self.state_mgr.state.get("known_rooms", [])), len(self.discovered_rooms))
-            births_count = max(len(self.room_creations), len(self.recent_room_births), 200)
-            velocity = velocity_ppm if velocity_ppm > 0 else (min(650, max(280, total_msgs * 3)) if total_msgs > 0 else 320)
+            state_dict = getattr(self.state_mgr, "state", {}) or {}
+            processed_msgs = state_dict.get("total_messages_processed", 0) if isinstance(state_dict, dict) else 0
+            known_dids = state_dict.get("known_dids", []) if isinstance(state_dict, dict) else []
+            known_rooms = state_dict.get("known_rooms", []) if isinstance(state_dict, dict) else []
+
+            total_msgs = max(self.total_messages, processed_msgs)
+            signed_msgs = self.signed_count
+            total_dids = max(len(agent_nodes), len(known_dids))
+            total_rooms = max(len(room_nodes), len(known_rooms), len(self.room_creations))
+            births_count = max(len(self.room_creations), 20)
+            vel_fallback = min(650, max(280, total_msgs * 3)) if total_msgs > 0 else 0
+            velocity = velocity_ppm if velocity_ppm > 0 else vel_fallback
 
             return {
                 "timestamp": int(now),
