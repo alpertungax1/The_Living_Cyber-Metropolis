@@ -254,6 +254,10 @@ async function fetchMetrics() {
     document.getElementById('metric-velocity').textContent = data.velocity_messages_per_min;
     document.getElementById('metric-total-msgs').textContent = data.total_messages;
 
+    document.getElementById('metric-dids-count').textContent = data.active_dids_count;
+    document.getElementById('metric-rooms-count').textContent = data.total_rooms_count;
+    document.getElementById('metric-births-count').textContent = data.recent_room_births_count;
+
     // Update Lifecycle Pills
     const didsEl = document.getElementById('pill-dids');
     if (didsEl) didsEl.textContent = `${Math.max(12, data.active_dids_count)}`;

@@ -227,6 +227,10 @@ class NetworkObserver:
                 for r in room_nodes[:10]
             ]
 
+            total_dids = max(len(agent_nodes), len(self.state_mgr.local_state.get("active_dids", [])))
+            total_rooms = max(len(room_nodes), len(self.discovered_rooms))
+            births_count = max(len(self.room_creations), len(self.recent_room_births))
+
             return {
                 "timestamp": int(now),
                 "total_messages": self.total_messages,
@@ -234,11 +238,11 @@ class NetworkObserver:
                 "anon_messages": self.anon_count,
                 "signature_ratio": round(sig_ratio, 4),
                 "velocity_messages_per_min": velocity_ppm,
-                "active_dids_count": len(agent_nodes),
-                "total_rooms_count": len(room_nodes),
+                "active_dids_count": total_dids,
+                "total_rooms_count": total_rooms,
                 "top_agents": top_agents,
                 "top_rooms": top_rooms,
-                "recent_room_births_count": len(self.room_creations),
+                "recent_room_births_count": births_count,
             }
 
     async def get_graph_data(self) -> Dict[str, Any]:

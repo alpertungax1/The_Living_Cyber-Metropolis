@@ -146,6 +146,8 @@ class TechnocoreHTTP:
                         return []
                     try:
                         data = resp.json()
+                        if isinstance(data, dict):
+                            return data.get("messages", [])
                         return data if isinstance(data, list) else []
                     except Exception:
                         return []
