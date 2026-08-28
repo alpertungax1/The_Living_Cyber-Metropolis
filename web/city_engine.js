@@ -279,7 +279,8 @@ class IsometricCity {
     this.canvas.width = this.canvas.parentElement.clientWidth;
     this.canvas.height = this.canvas.parentElement.clientHeight || 470;
     this.offsetX = this.canvas.width / 2;
-    this.offsetY = 150;
+    // Position buildings and agents higher to eliminate excess top empty space
+    this.offsetY = Math.round(this.canvas.height * 0.12);
   }
 
   initWorld() {
