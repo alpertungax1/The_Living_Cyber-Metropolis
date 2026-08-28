@@ -1,6 +1,6 @@
 /**
  * Technocore Work Graph - The Living Cyber-Metropolis (Isometric Engine)
- * High-definition 16-bit Pixel Agents, Obstacle Collision, Doors & Building Entrance/Exit.
+ * Clean Dialogue Orchestrator, Collision-free Speech Bubbles, Doors & 16-bit Agents.
  */
 
 class SoundEngine {
@@ -106,14 +106,13 @@ class PixelAgent {
     this.signedCount = isSigned ? 1 : 0;
     this.item = Math.random() > 0.4 ? (Math.random() > 0.5 ? 'briefcase' : 'laptop') : 'none';
 
-    // Streets & walkways around central ring (roads are free of buildings)
-    this.gridX = 14 + (Math.random() * 10 - 5);
-    this.gridY = 14 + (Math.random() * 10 - 5);
+    // Spread agents around city walkways
+    this.gridX = 14 + (Math.random() * 12 - 6);
+    this.gridY = 14 + (Math.random() * 12 - 6);
     this.targetGridX = this.gridX;
     this.targetGridY = this.gridY;
-    this.speed = 0.03 + Math.random() * 0.02;
+    this.speed = 0.028 + Math.random() * 0.02;
 
-    // State machine: 'wandering', 'going_to_door', 'inside_building'
     this.state = 'wandering';
     this.insideBuilding = null;
     this.insideTimer = 0;
@@ -124,19 +123,6 @@ class PixelAgent {
     this.facing = Math.random() > 0.5 ? 1 : -1;
     this.speechBubble = null;
     this.actionTimer = Math.floor(Math.random() * 100);
-
-    const sampleThoughts = [
-      "Verifying Ed25519 signature...",
-      "Heading to #lobby door...",
-      "Claiming twg1 quest...",
-      "Writing proof to /kv/...",
-      "Entering #d-twg-board...",
-      "Scanning /r/events...",
-      "Broadcasting 15m pulse"
-    ];
-    if (Math.random() < 0.15) {
-      this.setSpeech(sampleThoughts[Math.floor(Math.random() * sampleThoughts.length)]);
-    }
   }
 
   generatePalette(seedStr) {
@@ -156,34 +142,30 @@ class PixelAgent {
     };
   }
 
-  setSpeech(text) {
+  setSpeech(text, maxDuration = 220) {
     this.speechBubble = {
-      text: text.length > 45 ? text.slice(0, 42) + '...' : text,
-      timer: 260,
-      maxTimer: 260,
+      text: text.length > 42 ? text.slice(0, 39) + '...' : text,
+      timer: maxDuration,
+      maxTimer: maxDuration,
+      createdTs: Date.now()
     };
   }
 
   update(city) {
-    // If agent is inside building
+    // Inside building state
     if (this.state === 'inside_building') {
       this.opacity = Math.max(0, this.opacity - 0.05);
       this.insideTimer--;
       if (this.insideTimer <= 0) {
-        // Exit through the door!
         this.state = 'wandering';
         if (this.insideBuilding) {
           this.gridX = this.insideBuilding.doorGx;
           this.gridY = this.insideBuilding.doorGy;
-          // Step away onto the street
-          this.targetGridX = this.gridX + (this.insideBuilding.doorFacing === 'east' ? 1.5 : 0);
-          this.targetGridY = this.gridY + (this.insideBuilding.doorFacing === 'south' ? 1.5 : 0);
+          this.targetGridX = this.gridX + (Math.random() * 3 - 1.5);
+          this.targetGridY = this.gridY + (Math.random() * 3 - 1.5);
         }
         city.sound.playDoor();
         this.item = Math.random() > 0.4 ? 'briefcase' : 'laptop';
-        if (Math.random() < 0.5) {
-          this.setSpeech("Quest completed! Exiting building.");
-        }
       }
       return;
     }
@@ -194,7 +176,7 @@ class PixelAgent {
       this.opacity = 1.0;
     }
 
-    // Movement towards target with collision avoidance
+    // Movement towards target
     const dx = this.targetGridX - this.gridX;
     const dy = this.targetGridY - this.gridY;
     const dist = Math.hypot(dx, dy);
@@ -202,51 +184,42 @@ class PixelAgent {
     if (dist > 0.12) {
       const stepX = (dx / dist) * this.speed;
       const stepY = (dy / dist) * this.speed;
-
       const nextX = this.gridX + stepX;
       const nextY = this.gridY + stepY;
 
-      // Check collision with solid buildings (unless we are entering door)
       const collides = city.isTileSolid(nextX, nextY, this.insideBuilding);
       if (!collides || this.state === 'going_to_door') {
         this.gridX = nextX;
         this.gridY = nextY;
       } else {
-        // Slide along axes if blocked
         if (!city.isTileSolid(nextX, this.gridY, this.insideBuilding)) {
           this.gridX = nextX;
         } else if (!city.isTileSolid(this.gridX, nextY, this.insideBuilding)) {
           this.gridY = nextY;
         } else {
-          // Repath to street
           this.targetGridX = 14 + (Math.random() * 12 - 6);
           this.targetGridY = 14 + (Math.random() * 12 - 6);
         }
       }
 
-      this.walkCycle += 0.25;
+      this.walkCycle += 0.22;
       this.facing = dx >= 0 ? 1 : -1;
     } else {
-      // Reached target!
       if (this.state === 'going_to_door' && this.insideBuilding) {
-        // Enter building through the door!
         this.state = 'inside_building';
-        this.insideTimer = 180 + Math.floor(Math.random() * 180); // 3-6 seconds inside
+        this.insideTimer = 160 + Math.floor(Math.random() * 140);
         city.sound.playDoor();
       } else {
-        // Wandering logic: occasionally decide to visit a building
         this.actionTimer++;
-        if (this.actionTimer > 150 && Math.random() < 0.03) {
+        if (this.actionTimer > 180 && Math.random() < 0.02) {
           this.actionTimer = 0;
-          if (city && city.buildings.length > 0 && Math.random() < 0.6) {
+          if (city && city.buildings.length > 0 && Math.random() < 0.5) {
             const bldg = city.buildings[Math.floor(Math.random() * Math.min(city.buildings.length, 5))];
             this.insideBuilding = bldg;
             this.state = 'going_to_door';
             this.targetGridX = bldg.doorGx;
             this.targetGridY = bldg.doorGy;
-            this.setSpeech(`Entering #${bldg.name}...`);
           } else {
-            // Wander along safe street
             this.targetGridX = 14 + (Math.random() * 14 - 7);
             this.targetGridY = 14 + (Math.random() * 14 - 7);
           }
@@ -283,6 +256,10 @@ class IsometricCity {
     this.hoveredBuilding = null;
     this.selectedEntity = null;
 
+    // Smart Dialogue Orchestrator
+    this.maxActiveBubbles = 2; // Strict limit: max 2 speech bubbles at a time across the entire city!
+    this.lastSpeechTs = 0;
+
     this.frame = 0;
     this.rainParticles = [];
 
@@ -312,7 +289,6 @@ class IsometricCity {
       });
     }
 
-    // Core Landmarks with designated Doors & Entrances
     this.buildings = [
       {
         id: 'room:lobby',
@@ -321,7 +297,7 @@ class IsometricCity {
         type: 'landmark',
         gx: 14, gy: 14,
         width: 3, height: 3,
-        doorGx: 15.5, doorGy: 17.0, // Front door entrance
+        doorGx: 15.5, doorGy: 17.0,
         doorFacing: 'south',
         heightPx: 110,
         color: '#0369a1',
@@ -405,7 +381,6 @@ class IsometricCity {
   isTileSolid(gx, gy, targetBuilding = null) {
     for (const bldg of this.buildings) {
       if (bldg === targetBuilding) {
-        // If agent is near door, allow passing
         if (Math.hypot(gx - bldg.doorGx, gy - bldg.doorGy) < 0.6) return false;
       }
       if (gx >= bldg.gx && gx < bldg.gx + bldg.width && gy >= bldg.gy && gy < bldg.gy + bldg.height) {
@@ -446,6 +421,12 @@ class IsometricCity {
       const agent = new PixelAgent(a.id, a.isSigned ? a.id : '', a.isSigned, a.name, a.role);
       this.agents.set(a.id, agent);
     });
+
+    // Start with ONLY 1 clean welcome quote
+    const firstAgent = this.agents.values().next().value;
+    if (firstAgent) {
+      firstAgent.setSpeech("Technocore Work Graph online ⚡", 300);
+    }
   }
 
   isoToScreen(gx, gy, z = 0) {
@@ -524,15 +505,37 @@ class IsometricCity {
     const targetBldg = this.buildings.find(b => b.name === roomName) || this.buildings[0];
     if (targetBldg) {
       targetBldg.msgs = (targetBldg.msgs || 0) + 1;
-      // Head to building door!
       agent.insideBuilding = targetBldg;
       agent.state = 'going_to_door';
       agent.targetGridX = targetBldg.doorGx;
       agent.targetGridY = targetBldg.doorGy;
     }
 
-    agent.setSpeech(text);
-    this.sound.playTyping();
+    // Orchestrate speech: rate-limit speech bubble generation to avoid overlapping clutter
+    const now = Date.now();
+    if (now - this.lastSpeechTs > 2500) { // Only 1 new speech bubble every 2.5s
+      this.clearExcessBubbles();
+      agent.setSpeech(text, 240);
+      this.lastSpeechTs = now;
+      this.sound.playTyping();
+    }
+  }
+
+  clearExcessBubbles() {
+    const activeWithSpeech = [];
+    for (const a of this.agents.values()) {
+      if (a.speechBubble) {
+        activeWithSpeech.push(a);
+      }
+    }
+    // If we have >= maxActiveBubbles, remove the oldest ones
+    if (activeWithSpeech.length >= this.maxActiveBubbles) {
+      activeWithSpeech.sort((a, b) => a.speechBubble.timer - b.speechBubble.timer);
+      while (activeWithSpeech.length >= this.maxActiveBubbles) {
+        const oldest = activeWithSpeech.shift();
+        oldest.speechBubble = null;
+      }
+    }
   }
 
   initEvents() {
@@ -579,7 +582,7 @@ class IsometricCity {
 
       let found = null;
       for (const agent of this.agents.values()) {
-        if (agent.opacity < 0.2) continue; // inside
+        if (agent.opacity < 0.2) continue;
         const pos = this.isoToScreen(agent.gridX, agent.gridY);
         if (Math.hypot(clickX - pos.x, clickY - (pos.y - 18)) < 24 * this.scale) {
           found = { type: 'agent', entity: agent };
@@ -599,6 +602,9 @@ class IsometricCity {
 
       if (found) {
         this.selectedEntity = found;
+        if (found.type === 'agent') {
+          found.entity.setSpeech("Inspecting cryptographic credentials...", 240);
+        }
         if (window.openCRTInspector) {
           window.openCRTInspector(found);
         }
@@ -665,7 +671,7 @@ class IsometricCity {
     this.ctx.fill();
     this.ctx.stroke();
 
-    // Glowing Cyber Doorway on front wall
+    // Glowing Cyber Doorway
     if (doorGx && doorGy) {
       const doorScreen = this.isoToScreen(doorGx, doorGy);
       this.ctx.save();
@@ -677,7 +683,6 @@ class IsometricCity {
       this.ctx.lineWidth = 1.5;
       this.ctx.strokeRect(doorScreen.x - 5 * this.scale, doorScreen.y - 14 * this.scale, 10 * this.scale, 14 * this.scale);
 
-      // Doorway Light Pulse
       this.ctx.fillStyle = neonGlow;
       this.ctx.fillRect(doorScreen.x - 3 * this.scale, doorScreen.y - 12 * this.scale, 6 * this.scale, 2 * this.scale);
       this.ctx.restore();
@@ -728,7 +733,7 @@ class IsometricCity {
   }
 
   drawAgent(agent) {
-    if (agent.opacity <= 0.02) return; // invisible when deep inside building
+    if (agent.opacity <= 0.02) return;
 
     const pos = this.isoToScreen(agent.gridX, agent.gridY);
     const s = this.scale * 1.5;
@@ -798,35 +803,38 @@ class IsometricCity {
     this.ctx.fillStyle = agent.isSigned ? '#38bdf8' : '#94a3b8';
     this.ctx.fillText(agent.name, x, y - 31 * s + bob);
 
-    // Speech Bubble
+    // Speech Bubble (Only drawn if active and strictly capped)
     if (agent.speechBubble) {
       const bubbleText = agent.speechBubble.text;
       this.ctx.font = `${Math.max(9, 10 * this.scale)}px 'Fira Code', monospace`;
       const textWidth = this.ctx.measureText(bubbleText).width;
-      const bw = textWidth + 14 * this.scale;
-      const bh = 18 * this.scale;
+      const bw = textWidth + 16 * this.scale;
+      const bh = 20 * this.scale;
       const bx = x - bw / 2;
-      const by = y - 44 * s + bob;
+      const by = y - 48 * s + bob;
 
-      this.ctx.fillStyle = 'rgba(11, 15, 25, 0.96)';
+      // Card Background with clean shadow
+      this.ctx.fillStyle = 'rgba(10, 15, 26, 0.96)';
       this.ctx.strokeStyle = agent.isSigned ? '#00f2fe' : '#64748b';
       this.ctx.shadowColor = agent.isSigned ? '#00f2fe' : 'transparent';
-      this.ctx.shadowBlur = 6;
-      this.ctx.lineWidth = 1.2;
+      this.ctx.shadowBlur = 8;
+      this.ctx.lineWidth = 1.4;
       this.ctx.beginPath();
       this.ctx.roundRect(bx, by, bw, bh, 4);
       this.ctx.fill();
       this.ctx.stroke();
 
+      // Tail
       this.ctx.beginPath();
       this.ctx.moveTo(x - 3 * this.scale, by + bh);
-      this.ctx.lineTo(x, by + bh + 4 * this.scale);
+      this.ctx.lineTo(x, by + bh + 5 * this.scale);
       this.ctx.lineTo(x + 3 * this.scale, by + bh);
       this.ctx.fill();
 
+      // Text
       this.ctx.fillStyle = '#f8fafc';
       this.ctx.shadowBlur = 0;
-      this.ctx.fillText(bubbleText, x, by + 12 * this.scale);
+      this.ctx.fillText(bubbleText, x, by + 13.5 * this.scale);
     }
 
     this.ctx.restore();

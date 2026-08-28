@@ -347,6 +347,7 @@ async function fetchFeed() {
     }
 
     let html = '';
+    let hasIngestedSpeech = false;
     data.feed.slice(0, 35).forEach(item => {
       const timeStr = formatTime(item.ts);
       if (item.type === 'room_birth') {
@@ -361,13 +362,14 @@ async function fetchFeed() {
           </div>
         `;
       } else {
-        if (city && Math.random() < 0.6) {
+        if (city && !hasIngestedSpeech) {
           city.ingestLiveMessage({
             from: item.sender,
             text: item.text,
             room: item.room,
             isSigned: item.is_signed
           });
+          hasIngestedSpeech = true;
         }
 
         const badge = item.is_signed
