@@ -107,12 +107,12 @@ class PixelAgent {
     this.item = Math.random() > 0.4 ? (Math.random() > 0.5 ? 'briefcase' : 'laptop') : 'none';
 
     // Spread agents around city walkways
-    // Dynamic, lively walking speed across grid
+    // Natural, smooth walking speed across grid
     this.gridX = 14 + (Math.random() * 12 - 6);
     this.gridY = 14 + (Math.random() * 12 - 6);
     this.targetGridX = this.gridX + (Math.random() * 6 - 3);
     this.targetGridY = this.gridY + (Math.random() * 6 - 3);
-    this.speed = 0.065 + Math.random() * 0.04;
+    this.speed = 0.038 + Math.random() * 0.015;
 
     this.state = 'wandering';
     this.insideBuilding = null;
@@ -203,7 +203,7 @@ class PixelAgent {
         }
       }
 
-      this.walkCycle += 0.35;
+      this.walkCycle += 0.22;
       this.facing = dx >= 0 ? 1 : -1;
     } else {
       // Reached destination
@@ -745,7 +745,7 @@ class IsometricCity {
     const x = pos.x;
     const y = pos.y;
     const isMoving = agent.state !== 'inside_building';
-    const bob = isMoving ? Math.abs(Math.sin(agent.walkCycle)) * 2.5 * s : 0;
+    const bob = isMoving ? Math.abs(Math.sin(agent.walkCycle)) * 1.5 * s : 0;
 
     this.ctx.save();
     this.ctx.globalAlpha = agent.opacity;
@@ -753,11 +753,11 @@ class IsometricCity {
     // Shadow
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
     this.ctx.beginPath();
-    this.ctx.ellipse(x, y, (7 + (isMoving ? Math.sin(agent.walkCycle) * 0.8 : 0)) * s, 3.5 * s, 0, 0, Math.PI * 2);
+    this.ctx.ellipse(x, y, (7 + (isMoving ? Math.sin(agent.walkCycle) * 0.5 : 0)) * s, 3.5 * s, 0, 0, Math.PI * 2);
     this.ctx.fill();
 
-    // Legs with clear dynamic walking swing
-    const legSwing = Math.sin(agent.walkCycle) * 4.5 * s;
+    // Legs with natural walking swing
+    const legSwing = Math.sin(agent.walkCycle) * 3.2 * s;
     this.ctx.fillStyle = agent.palette.pants;
     this.ctx.fillRect(x - 3 * s, y - 8 * s + bob, 2.5 * s, 6 * s + legSwing);
     this.ctx.fillRect(x + 0.5 * s, y - 8 * s + bob, 2.5 * s, 6 * s - legSwing);
