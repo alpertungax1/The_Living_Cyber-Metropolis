@@ -1,12 +1,14 @@
 /**
- * Technocore Work Graph - The Living Cyber-Metropolis (Isometric Engine)
- * Clean Dialogue Orchestrator, Collision-free Speech Bubbles, Doors & 16-bit Agents.
+ * Technocore Work Graph - The Living Cyber-Metropolis (High-Performance Isometric Engine)
+ * Ultra-optimized 60FPS render loop, bounded agent pool (anti-freeze), direct speech bubble clicking,
+ * responsive hover cursor, collision avoidance, and cyber CRT inspection.
  */
 
 class SoundEngine {
   constructor() {
     this.ctx = null;
     this.enabled = false;
+    this.lastPlayTs = 0;
   }
 
   init() {
@@ -27,12 +29,15 @@ class SoundEngine {
 
   playTyping() {
     if (!this.enabled || !this.ctx) return;
+    const now = Date.now();
+    if (now - this.lastPlayTs < 120) return; // Audio rate limit
+    this.lastPlayTs = now;
     try {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(750 + Math.random() * 350, this.ctx.currentTime);
-      gain.gain.setValueAtTime(0.03, this.ctx.currentTime);
+      gain.gain.setValueAtTime(0.02, this.ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.03);
       osc.connect(gain);
       gain.connect(this.ctx.destination);
@@ -43,19 +48,22 @@ class SoundEngine {
 
   playChime() {
     if (!this.enabled || !this.ctx) return;
+    const now = Date.now();
+    if (now - this.lastPlayTs < 400) return;
+    this.lastPlayTs = now;
     try {
       const notes = [523.25, 659.25, 783.99, 1046.50];
       notes.forEach((freq, idx) => {
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.05);
-        gain.gain.setValueAtTime(0.05, this.ctx.currentTime + idx * 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + idx * 0.05 + 0.2);
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.04);
+        gain.gain.setValueAtTime(0.03, this.ctx.currentTime + idx * 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + idx * 0.04 + 0.18);
         osc.connect(gain);
         gain.connect(this.ctx.destination);
-        osc.start(this.ctx.currentTime + idx * 0.05);
-        osc.stop(this.ctx.currentTime + idx * 0.05 + 0.2);
+        osc.start(this.ctx.currentTime + idx * 0.04);
+        osc.stop(this.ctx.currentTime + idx * 0.04 + 0.18);
       });
     } catch (e) {}
   }
@@ -67,13 +75,13 @@ class SoundEngine {
       const gain = this.ctx.createGain();
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(220, this.ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(440, this.ctx.currentTime + 0.1);
-      gain.gain.setValueAtTime(0.02, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
+      osc.frequency.exponentialRampToValueAtTime(440, this.ctx.currentTime + 0.08);
+      gain.gain.setValueAtTime(0.015, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.12);
       osc.connect(gain);
       gain.connect(this.ctx.destination);
       osc.start();
-      osc.stop(this.ctx.currentTime + 0.15);
+      osc.stop(this.ctx.currentTime + 0.12);
     } catch (e) {}
   }
 
@@ -85,12 +93,12 @@ class SoundEngine {
       osc.type = 'square';
       osc.frequency.setValueAtTime(440, this.ctx.currentTime);
       osc.frequency.setValueAtTime(880, this.ctx.currentTime + 0.08);
-      gain.gain.setValueAtTime(0.04, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.22);
+      gain.gain.setValueAtTime(0.03, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.2);
       osc.connect(gain);
       gain.connect(this.ctx.destination);
       osc.start();
-      osc.stop(this.ctx.currentTime + 0.22);
+      osc.stop(this.ctx.currentTime + 0.2);
     } catch (e) {}
   }
 }
@@ -106,13 +114,12 @@ class PixelAgent {
     this.signedCount = isSigned ? 1 : 0;
     this.item = Math.random() > 0.4 ? (Math.random() > 0.5 ? 'briefcase' : 'laptop') : 'none';
 
-    // Spread agents around city walkways
-    // Calm, slow and peaceful RPG walking speed across grid
+    // Streets & walkways around central ring
     this.gridX = 14 + (Math.random() * 12 - 6);
     this.gridY = 14 + (Math.random() * 12 - 6);
     this.targetGridX = this.gridX + (Math.random() * 4 - 2);
     this.targetGridY = this.gridY + (Math.random() * 4 - 2);
-    this.speed = 0.014 + Math.random() * 0.008;
+    this.speed = 0.015 + Math.random() * 0.008;
 
     this.state = 'wandering';
     this.insideBuilding = null;
@@ -124,6 +131,10 @@ class PixelAgent {
     this.facing = Math.random() > 0.5 ? 1 : -1;
     this.speechBubble = null;
     this.actionTimer = Math.floor(Math.random() * 60);
+
+    // Screen bounds cached for precise click detection
+    this.screenBounds = { x: 0, y: 0, radius: 20 };
+    this.bubbleBounds = null;
   }
 
   generatePalette(seedStr) {
@@ -143,9 +154,9 @@ class PixelAgent {
     };
   }
 
-  setSpeech(text, maxDuration = 220) {
+  setSpeech(text, maxDuration = 240) {
     this.speechBubble = {
-      text: text.length > 42 ? text.slice(0, 39) + '...' : text,
+      text: text.length > 44 ? text.slice(0, 41) + '...' : text,
       timer: maxDuration,
       maxTimer: maxDuration,
       createdTs: Date.now()
@@ -234,6 +245,7 @@ class PixelAgent {
       this.speechBubble.timer--;
       if (this.speechBubble.timer <= 0) {
         this.speechBubble = null;
+        this.bubbleBounds = null;
       }
     }
   }
@@ -257,10 +269,13 @@ class IsometricCity {
     this.agents = new Map();
     this.particles = [];
     this.hoveredBuilding = null;
+    this.hoveredAgent = null;
     this.selectedEntity = null;
 
-    // Smart Dialogue Orchestrator
-    this.maxActiveBubbles = 2; // Strict limit: max 2 speech bubbles at a time across the entire city!
+    // Hard cap limits to guarantee 60 FPS performance without memory leaks
+    this.maxAgents = 32;
+    this.maxBuildings = 24;
+    this.maxActiveBubbles = 2;
     this.lastSpeechTs = 0;
 
     this.frame = 0;
@@ -278,18 +293,18 @@ class IsometricCity {
     this.canvas.width = this.canvas.parentElement.clientWidth;
     this.canvas.height = this.canvas.parentElement.clientHeight || 470;
     this.offsetX = this.canvas.width / 2;
-    // Position buildings and agents higher to eliminate excess top empty space
-    this.offsetY = Math.round(this.canvas.height * 0.12);
+    // Elevate camera to center city and remove excess top empty space
+    this.offsetY = Math.round(this.canvas.height * 0.14);
   }
 
   initWorld() {
-    for (let i = 0; i < 35; i++) {
+    for (let i = 0; i < 30; i++) {
       this.rainParticles.push({
         x: Math.random() * 1400,
         y: Math.random() * 800,
-        speed: 3 + Math.random() * 5,
-        len: 8 + Math.random() * 12,
-        opacity: 0.12 + Math.random() * 0.2
+        speed: 3 + Math.random() * 4,
+        len: 8 + Math.random() * 10,
+        opacity: 0.12 + Math.random() * 0.18
       });
     }
 
@@ -383,7 +398,8 @@ class IsometricCity {
   }
 
   isTileSolid(gx, gy, targetBuilding = null) {
-    for (const bldg of this.buildings) {
+    for (let i = 0; i < this.buildings.length; i++) {
+      const bldg = this.buildings[i];
       if (bldg === targetBuilding) {
         if (Math.hypot(gx - bldg.doorGx, gy - bldg.doorGy) < 0.6) return false;
       }
@@ -410,7 +426,7 @@ class IsometricCity {
       { id: '~speedy-bot', isSigned: false, name: '~speedy-bot', role: 'worker' }
     ];
 
-    for (let i = 1; i <= 16; i++) {
+    for (let i = 1; i <= 14; i++) {
       const isSig = i % 2 === 0;
       const fakeDid = isSig ? `did:key:z6Mk${Math.random().toString(36).substring(2, 10)}...` : `~agent_${i}`;
       initialAgents.push({
@@ -426,10 +442,9 @@ class IsometricCity {
       this.agents.set(a.id, agent);
     });
 
-    // Start with ONLY 1 clean welcome quote
     const firstAgent = this.agents.values().next().value;
     if (firstAgent) {
-      firstAgent.setSpeech("Technocore Work Graph online ⚡", 300);
+      firstAgent.setSpeech("Technocore Work Graph online ⚡", 260);
     }
   }
 
@@ -441,6 +456,15 @@ class IsometricCity {
 
   addDiscoveredRoom(roomName) {
     if (this.buildings.some(b => b.name === roomName)) return;
+
+    // Keep building count bounded to prevent lag
+    if (this.buildings.length >= this.maxBuildings) {
+      // Find oldest non-landmark building and replace
+      const nonLandmarkIdx = this.buildings.findIndex(b => !b.isLandmark);
+      if (nonLandmarkIdx !== -1) {
+        this.buildings.splice(nonLandmarkIdx, 1);
+      }
+    }
 
     const angle = Math.random() * Math.PI * 2;
     const radius = 8 + Math.random() * 5;
@@ -478,15 +502,16 @@ class IsometricCity {
   }
 
   spawnPortalBeam(gx, gy, color) {
-    for (let i = 0; i < 20; i++) {
+    if (this.particles.length > 40) return; // Bound particles
+    for (let i = 0; i < 15; i++) {
       this.particles.push({
         gx: gx + (Math.random() - 0.5) * 0.4,
         gy: gy + (Math.random() - 0.5) * 0.4,
-        z: 120 + Math.random() * 80,
-        vz: -3.5 - Math.random() * 3.5,
+        z: 100 + Math.random() * 60,
+        vz: -3.0 - Math.random() * 3.0,
         color: color || '#00f2fe',
-        size: 2 + Math.random() * 2.5,
-        life: 50
+        size: 2 + Math.random() * 2,
+        life: 40
       });
     }
   }
@@ -499,6 +524,15 @@ class IsometricCity {
 
     let agent = this.agents.get(sender);
     if (!agent) {
+      // If agent pool is saturated, evict oldest non-keeper agent to prevent freeze
+      if (this.agents.size >= this.maxAgents) {
+        for (const [key, a] of this.agents.entries()) {
+          if (a.role !== 'keeper' && !a.speechBubble) {
+            this.agents.delete(key);
+            break;
+          }
+        }
+      }
       agent = new PixelAgent(sender, isSigned ? sender : '', isSigned, sender);
       this.agents.set(sender, agent);
     }
@@ -515,9 +549,9 @@ class IsometricCity {
       agent.targetGridY = targetBldg.doorGy;
     }
 
-    // Orchestrate speech: rate-limit speech bubble generation to avoid overlapping clutter
+    // Orchestrate speech
     const now = Date.now();
-    if (now - this.lastSpeechTs > 2500) { // Only 1 new speech bubble every 2.5s
+    if (now - this.lastSpeechTs > 2800) {
       this.clearExcessBubbles();
       agent.setSpeech(text, 240);
       this.lastSpeechTs = now;
@@ -532,12 +566,12 @@ class IsometricCity {
         activeWithSpeech.push(a);
       }
     }
-    // If we have >= maxActiveBubbles, remove the oldest ones
     if (activeWithSpeech.length >= this.maxActiveBubbles) {
       activeWithSpeech.sort((a, b) => a.speechBubble.timer - b.speechBubble.timer);
       while (activeWithSpeech.length >= this.maxActiveBubbles) {
         const oldest = activeWithSpeech.shift();
         oldest.speechBubble = null;
+        oldest.bubbleBounds = null;
       }
     }
   }
@@ -561,14 +595,46 @@ class IsometricCity {
       const rect = this.canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
+
+      let isHoveringInteractive = false;
       this.hoveredBuilding = null;
-      for (const bldg of this.buildings) {
-        const pos = this.isoToScreen(bldg.gx + bldg.width / 2, bldg.gy + bldg.height / 2);
-        if (Math.hypot(mx - pos.x, my - (pos.y - bldg.heightPx / 2)) < 30 * this.scale) {
-          this.hoveredBuilding = bldg;
+      this.hoveredAgent = null;
+
+      // Check Speech Bubbles & Agents for Hover Cursor
+      for (const agent of this.agents.values()) {
+        if (agent.opacity < 0.2) continue;
+
+        // Check speech bubble hover
+        if (agent.bubbleBounds) {
+          const b = agent.bubbleBounds;
+          if (mx >= b.bx && mx <= b.bx + b.bw && my >= b.by && my <= b.by + b.bh) {
+            isHoveringInteractive = true;
+            this.hoveredAgent = agent;
+            break;
+          }
+        }
+
+        // Check agent avatar hover
+        const pos = this.isoToScreen(agent.gridX, agent.gridY);
+        if (Math.hypot(mx - pos.x, my - (pos.y - 18 * this.scale)) < 24 * this.scale) {
+          isHoveringInteractive = true;
+          this.hoveredAgent = agent;
           break;
         }
       }
+
+      if (!isHoveringInteractive) {
+        for (const bldg of this.buildings) {
+          const pos = this.isoToScreen(bldg.gx + bldg.width / 2, bldg.gy + bldg.height / 2);
+          if (Math.hypot(mx - pos.x, my - (pos.y - bldg.heightPx / 2)) < 32 * this.scale) {
+            this.hoveredBuilding = bldg;
+            isHoveringInteractive = true;
+            break;
+          }
+        }
+      }
+
+      this.canvas.style.cursor = isDragging ? 'grabbing' : isHoveringInteractive ? 'pointer' : 'grab';
     });
 
     window.addEventListener('mouseup', () => { isDragging = false; });
@@ -579,25 +645,43 @@ class IsometricCity {
       this.scale = Math.max(0.5, Math.min(2.2, this.scale * zoomFactor));
     });
 
+    // High-Precision Direct Click Handler (Speech Bubbles, Agents & Buildings)
     this.canvas.addEventListener('click', (e) => {
       const rect = this.canvas.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
       const clickY = e.clientY - rect.top;
 
       let found = null;
+
+      // 1. Check Speech Bubbles directly (highest click priority)
       for (const agent of this.agents.values()) {
-        if (agent.opacity < 0.2) continue;
-        const pos = this.isoToScreen(agent.gridX, agent.gridY);
-        if (Math.hypot(clickX - pos.x, clickY - (pos.y - 18)) < 24 * this.scale) {
-          found = { type: 'agent', entity: agent };
-          break;
+        if (agent.bubbleBounds) {
+          const b = agent.bubbleBounds;
+          if (clickX >= b.bx - 4 && clickX <= b.bx + b.bw + 4 && clickY >= b.by - 4 && clickY <= b.by + b.bh + 6) {
+            found = { type: 'agent', entity: agent, fromBubble: true };
+            break;
+          }
         }
       }
 
+      // 2. Check Agent Figures
+      if (!found) {
+        for (const agent of this.agents.values()) {
+          if (agent.opacity < 0.2) continue;
+          const pos = this.isoToScreen(agent.gridX, agent.gridY);
+          // Generous hit box covering full avatar
+          if (Math.hypot(clickX - pos.x, clickY - (pos.y - 20 * this.scale)) < 26 * this.scale) {
+            found = { type: 'agent', entity: agent };
+            break;
+          }
+        }
+      }
+
+      // 3. Check Buildings
       if (!found) {
         for (const bldg of this.buildings) {
           const pos = this.isoToScreen(bldg.gx + bldg.width / 2, bldg.gy + bldg.height / 2);
-          if (Math.hypot(clickX - pos.x, clickY - (pos.y - bldg.heightPx / 2)) < 35 * this.scale) {
+          if (Math.hypot(clickX - pos.x, clickY - (pos.y - bldg.heightPx / 2)) < 36 * this.scale) {
             found = { type: 'building', entity: bldg };
             break;
           }
@@ -761,13 +845,6 @@ class IsometricCity {
     this.ctx.fillRect(x - 3 * s, y - 8 * s + bob, 2.5 * s, 6 * s + legSwing);
     this.ctx.fillRect(x + 0.5 * s, y - 8 * s + bob, 2.5 * s, 6 * s - legSwing);
 
-    // Subtle neon step ripple when walking fast
-    if (agent.isSigned && Math.random() < 0.1) {
-      this.ctx.strokeStyle = 'rgba(0, 242, 254, 0.3)';
-      this.ctx.lineWidth = 1;
-      this.ctx.strokeRect(x - 4 * s, y - 2 * s, 8 * s, 2 * s);
-    }
-
     // Torso
     this.ctx.fillStyle = agent.palette.shirt;
     this.ctx.fillRect(x - 4.5 * s, y - 16 * s + bob, 9 * s, 8 * s);
@@ -815,7 +892,7 @@ class IsometricCity {
     this.ctx.fillStyle = agent.isSigned ? '#38bdf8' : '#94a3b8';
     this.ctx.fillText(agent.name, x, y - 31 * s + bob);
 
-    // Speech Bubble (Only drawn if active and strictly capped)
+    // Speech Bubble with bounds caching for click detection
     if (agent.speechBubble) {
       const bubbleText = agent.speechBubble.text;
       this.ctx.font = `${Math.max(9, 10 * this.scale)}px 'Fira Code', monospace`;
@@ -825,12 +902,17 @@ class IsometricCity {
       const bx = x - bw / 2;
       const by = y - 48 * s + bob;
 
-      // Card Background with clean shadow
-      this.ctx.fillStyle = 'rgba(10, 15, 26, 0.96)';
-      this.ctx.strokeStyle = agent.isSigned ? '#00f2fe' : '#64748b';
+      // Cache bounds for click/hover
+      agent.bubbleBounds = { bx, by, bw, bh };
+
+      const isHovered = this.hoveredAgent === agent;
+
+      // Card Background
+      this.ctx.fillStyle = isHovered ? 'rgba(15, 23, 42, 0.98)' : 'rgba(10, 15, 26, 0.96)';
+      this.ctx.strokeStyle = isHovered ? '#38bdf8' : agent.isSigned ? '#00f2fe' : '#64748b';
       this.ctx.shadowColor = agent.isSigned ? '#00f2fe' : 'transparent';
-      this.ctx.shadowBlur = 8;
-      this.ctx.lineWidth = 1.4;
+      this.ctx.shadowBlur = isHovered ? 12 : 8;
+      this.ctx.lineWidth = isHovered ? 2.0 : 1.4;
       this.ctx.beginPath();
       this.ctx.roundRect(bx, by, bw, bh, 4);
       this.ctx.fill();
@@ -844,9 +926,11 @@ class IsometricCity {
       this.ctx.fill();
 
       // Text
-      this.ctx.fillStyle = '#f8fafc';
+      this.ctx.fillStyle = isHovered ? '#38bdf8' : '#f8fafc';
       this.ctx.shadowBlur = 0;
       this.ctx.fillText(bubbleText, x, by + 13.5 * this.scale);
+    } else {
+      agent.bubbleBounds = null;
     }
 
     this.ctx.restore();
@@ -854,7 +938,8 @@ class IsometricCity {
 
   drawRainAndAtmosphere() {
     this.ctx.save();
-    for (const p of this.rainParticles) {
+    for (let i = 0; i < this.rainParticles.length; i++) {
+      const p = this.rainParticles[i];
       p.y += p.speed;
       p.x -= p.speed * 0.2;
       if (p.y > this.canvas.height) {
@@ -919,8 +1004,8 @@ class IsometricCity {
     }
 
     renderList.sort((a, b) => a.depth - b.depth);
-    for (const item of renderList) {
-      item.draw();
+    for (let i = 0; i < renderList.length; i++) {
+      renderList[i].draw();
     }
 
     this.drawRainAndAtmosphere();

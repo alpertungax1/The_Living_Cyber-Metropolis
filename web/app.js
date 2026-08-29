@@ -348,7 +348,7 @@ async function fetchFeed() {
 
     let html = '';
     let hasIngestedSpeech = false;
-    data.feed.slice(0, 35).forEach(item => {
+    data.feed.slice(0, 20).forEach(item => {
       const timeStr = formatTime(item.ts);
       if (item.type === 'room_birth') {
         if (city) city.addDiscoveredRoom(item.room);
