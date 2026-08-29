@@ -1,7 +1,7 @@
 /**
- * Technocore Work Graph - The Living Cyber-Metropolis (High-Performance Isometric Engine)
- * Ultra-optimized 60FPS render loop, bounded agent pool (anti-freeze), direct speech bubble clicking,
- * responsive hover cursor, collision avoidance, and cyber CRT inspection.
+ * Technocore Work Graph - The Living Cyber-Metropolis (Isometric Engine 2.0)
+ * Agent-Agent separation physics (no clustering), multi-district urban waypoints,
+ * ultra-compact 16-bit badges, direct speech bubble clicking, and 60FPS optimization.
  */
 
 class SoundEngine {
@@ -30,7 +30,7 @@ class SoundEngine {
   playTyping() {
     if (!this.enabled || !this.ctx) return;
     const now = Date.now();
-    if (now - this.lastPlayTs < 120) return; // Audio rate limit
+    if (now - this.lastPlayTs < 140) return;
     this.lastPlayTs = now;
     try {
       const osc = this.ctx.createOscillator();
@@ -108,17 +108,28 @@ class PixelAgent {
     this.id = id;
     this.did = did || '';
     this.isSigned = isSigned;
-    this.name = name || (isSigned ? did.slice(-8) : id);
     this.role = role;
     this.msgCount = 1;
     this.signedCount = isSigned ? 1 : 0;
     this.item = Math.random() > 0.4 ? (Math.random() > 0.5 ? 'briefcase' : 'laptop') : 'none';
 
-    // Streets & walkways around central ring
-    this.gridX = 14 + (Math.random() * 12 - 6);
-    this.gridY = 14 + (Math.random() * 12 - 6);
-    this.targetGridX = this.gridX + (Math.random() * 4 - 2);
-    this.targetGridY = this.gridY + (Math.random() * 4 - 2);
+    // Compact 4-5 char badge label (e.g. "..4f8a", "~bot2")
+    if (isSigned && did) {
+      this.shortBadge = `..${did.slice(-4)}`;
+    } else if (name && name.startsWith('did:key:')) {
+      this.shortBadge = `..${name.slice(-4)}`;
+    } else {
+      this.shortBadge = name.length > 7 ? name.slice(0, 6) : name;
+    }
+    this.fullName = name || (isSigned ? did : id);
+
+    // Spread agents across 4 quadrants initially
+    const spawnAngle = Math.random() * Math.PI * 2;
+    const spawnDist = 4 + Math.random() * 8;
+    this.gridX = 14 + Math.cos(spawnAngle) * spawnDist;
+    this.gridY = 14 + Math.sin(spawnAngle) * spawnDist;
+    this.targetGridX = this.gridX;
+    this.targetGridY = this.gridY;
     this.speed = 0.015 + Math.random() * 0.008;
 
     this.state = 'wandering';
@@ -132,8 +143,6 @@ class PixelAgent {
     this.speechBubble = null;
     this.actionTimer = Math.floor(Math.random() * 60);
 
-    // Screen bounds cached for precise click detection
-    this.screenBounds = { x: 0, y: 0, radius: 20 };
     this.bubbleBounds = null;
   }
 
@@ -164,17 +173,19 @@ class PixelAgent {
   }
 
   update(city) {
-    // Inside building state
+    // 1. Inside building state (hidden processing)
     if (this.state === 'inside_building') {
-      this.opacity = Math.max(0, this.opacity - 0.05);
+      this.opacity = Math.max(0, this.opacity - 0.08);
       this.insideTimer--;
       if (this.insideTimer <= 0) {
         this.state = 'wandering';
+        // Exit to a random open street waypoint
+        const wp = city.getRandomDistrictWaypoint();
+        this.targetGridX = wp.gx;
+        this.targetGridY = wp.gy;
         if (this.insideBuilding) {
-          this.gridX = this.insideBuilding.doorGx;
-          this.gridY = this.insideBuilding.doorGy;
-          this.targetGridX = this.gridX + (Math.random() * 4 - 2);
-          this.targetGridY = this.gridY + (Math.random() * 4 - 2);
+          this.gridX = this.insideBuilding.doorGx + (Math.random() * 2 - 1);
+          this.gridY = this.insideBuilding.doorGy + (Math.random() * 2 - 1);
         }
         city.sound.playDoor();
         this.item = Math.random() > 0.4 ? 'briefcase' : 'laptop';
@@ -183,17 +194,39 @@ class PixelAgent {
     }
 
     if (this.state === 'going_to_door') {
-      this.opacity = Math.min(1.0, this.opacity + 0.05);
+      this.opacity = Math.min(1.0, this.opacity + 0.08);
     } else {
       this.opacity = 1.0;
     }
 
-    // Movement towards target
+    // 2. Separation Physics: Gentle repulsion from other agents to avoid clustering
+    let repX = 0;
+    let repY = 0;
+    for (const other of city.agents.values()) {
+      if (other === this || other.state === 'inside_building') continue;
+      const dX = this.gridX - other.gridX;
+      const dY = this.gridY - other.gridY;
+      const dist = Math.hypot(dX, dY);
+      const minDistance = 1.4; // minimum personal space radius
+      if (dist > 0.001 && dist < minDistance) {
+        const force = (minDistance - dist) * 0.006;
+        repX += (dX / dist) * force;
+        repY += (dY / dist) * force;
+      }
+    }
+
+    // Apply gentle separation push
+    if (!city.isTileSolid(this.gridX + repX, this.gridY + repY)) {
+      this.gridX += repX;
+      this.gridY += repY;
+    }
+
+    // 3. Movement towards waypoint target
     const dx = this.targetGridX - this.gridX;
     const dy = this.targetGridY - this.gridY;
     const dist = Math.hypot(dx, dy);
 
-    if (dist > 0.12) {
+    if (dist > 0.15) {
       const stepX = (dx / dist) * this.speed;
       const stepY = (dy / dist) * this.speed;
       const nextX = this.gridX + stepX;
@@ -204,38 +237,45 @@ class PixelAgent {
         this.gridX = nextX;
         this.gridY = nextY;
       } else {
+        // Slide along open axis
         if (!city.isTileSolid(nextX, this.gridY, this.insideBuilding)) {
           this.gridX = nextX;
         } else if (!city.isTileSolid(this.gridX, nextY, this.insideBuilding)) {
           this.gridY = nextY;
         } else {
-          this.targetGridX = 14 + (Math.random() * 12 - 6);
-          this.targetGridY = 14 + (Math.random() * 12 - 6);
+          // Re-route to a new district waypoint
+          const wp = city.getRandomDistrictWaypoint();
+          this.targetGridX = wp.gx;
+          this.targetGridY = wp.gy;
         }
       }
 
       this.walkCycle += 0.09;
       this.facing = dx >= 0 ? 1 : -1;
     } else {
-      // Reached destination - calm idling before next move
+      // Reached target
       if (this.state === 'going_to_door' && this.insideBuilding) {
         this.state = 'inside_building';
-        this.insideTimer = 120 + Math.floor(Math.random() * 100);
+        this.insideTimer = 100 + Math.floor(Math.random() * 80);
         city.sound.playDoor();
       } else {
+        // Idle and pick next urban district waypoint
         this.actionTimer++;
-        if (this.actionTimer > 100 && Math.random() < 0.05) {
+        if (this.actionTimer > 80 && Math.random() < 0.08) {
           this.actionTimer = 0;
-          if (city && city.buildings.length > 0 && Math.random() < 0.5) {
+          if (Math.random() < 0.35 && city.buildings.length > 0) {
+            // Visit a building door
             const bldg = city.buildings[Math.floor(Math.random() * Math.min(city.buildings.length, 5))];
             this.insideBuilding = bldg;
             this.state = 'going_to_door';
             this.targetGridX = bldg.doorGx;
             this.targetGridY = bldg.doorGy;
           } else {
+            // Wander through city districts
             this.state = 'wandering';
-            this.targetGridX = 14 + (Math.random() * 12 - 6);
-            this.targetGridY = 14 + (Math.random() * 12 - 6);
+            const wp = city.getRandomDistrictWaypoint();
+            this.targetGridX = wp.gx;
+            this.targetGridY = wp.gy;
           }
         }
       }
@@ -272,8 +312,21 @@ class IsometricCity {
     this.hoveredAgent = null;
     this.selectedEntity = null;
 
-    // Hard cap limits to guarantee 60 FPS performance without memory leaks
-    this.maxAgents = 32;
+    // Urban District Waypoints for wide distribution across the metropolis
+    this.districtWaypoints = [
+      { name: 'North Boulevard', gx: 14, gy: 4 },
+      { name: 'Northwest Tech Ave', gx: 6, gy: 6 },
+      { name: 'West Market Plaza', gx: 4, gy: 14 },
+      { name: 'Southwest Promenade', gx: 6, gy: 22 },
+      { name: 'South Transit St', gx: 14, gy: 25 },
+      { name: 'Southeast Radar Park', gx: 22, gy: 22 },
+      { name: 'East Spaceport Ring', gx: 24, gy: 14 },
+      { name: 'Northeast Cyber Gate', gx: 22, gy: 6 },
+      { name: 'Central Plaza Outer Walk', gx: 11, gy: 17 },
+      { name: 'Central Plaza North Walk', gx: 17, gy: 11 }
+    ];
+
+    this.maxAgents = 30;
     this.maxBuildings = 24;
     this.maxActiveBubbles = 2;
     this.lastSpeechTs = 0;
@@ -289,11 +342,18 @@ class IsometricCity {
     this.loop();
   }
 
+  getRandomDistrictWaypoint() {
+    const wp = this.districtWaypoints[Math.floor(Math.random() * this.districtWaypoints.length)];
+    return {
+      gx: wp.gx + (Math.random() * 3 - 1.5),
+      gy: wp.gy + (Math.random() * 3 - 1.5)
+    };
+  }
+
   resize() {
     this.canvas.width = this.canvas.parentElement.clientWidth;
     this.canvas.height = this.canvas.parentElement.clientHeight || 470;
     this.offsetX = this.canvas.width / 2;
-    // Elevate camera to center city and remove excess top empty space
     this.offsetY = Math.round(this.canvas.height * 0.14);
   }
 
@@ -412,27 +472,27 @@ class IsometricCity {
 
   initAgentsPopulation() {
     const initialAgents = [
-      { id: 'did:key:z6MkftWDmuuivktitBVnpZRY8ccVoqrpN1g57M4YbMZPhTCB', isSigned: true, name: 'Keeper-z6Mk…hTCB', role: 'keeper' },
-      { id: 'did:key:z6Mkj28A9Xq1bK9Fm7s3L0v4Yp6Z1w2E8uT5rN4cQ7vB', isSigned: true, name: 'Observer-Alpha', role: 'worker' },
-      { id: 'did:key:z6Mkp94B7Vc3mN8L1s5K0w2Yq4Z6x1E9uT3rP7cQ2vA', isSigned: true, name: 'Courier-Delta', role: 'worker' },
-      { id: 'did:key:z6Mkq15C8Wd4nO9M2t6L1x3Zr5A7y2F0vU4sQ8dR3wB', isSigned: true, name: 'Audit-Agent-7', role: 'worker' },
-      { id: 'did:key:z6Mkr26D9Xe5oP0N3u7M2y4As6B8z3G1wV5tR9eS4xC', isSigned: true, name: 'Proof-Builder', role: 'worker' },
-      { id: 'did:key:z6Mks37E0Yf6pQ1O4v8N3z5Bt7C9a4H2xW6uS0fT5yD', isSigned: true, name: 'Scout-Flop', role: 'scout' },
-      { id: 'did:key:z6Mkt48F1Zg7qR2P5w9O4a6Cu8D0b5I3yX7vT1gU6zE', isSigned: true, name: 'Kibble-Validator', role: 'worker' },
-      { id: 'did:key:z6Mku59G2ah8rS3Q6x0P5b7Dv9E1c6J4zY8wU2hV7aF', isSigned: true, name: 'Rep-Tracker', role: 'trader' },
-      { id: '~flop-trader', isSigned: false, name: '~flop-trader', role: 'trader' },
-      { id: '~kibble-fan', isSigned: false, name: '~kibble-fan', role: 'scout' },
-      { id: '~cypher-anon', isSigned: false, name: '~cypher-anon', role: 'scout' },
-      { id: '~speedy-bot', isSigned: false, name: '~speedy-bot', role: 'worker' }
+      { id: 'did:key:z6MkftWDmuuivktitBVnpZRY8ccVoqrpN1g57M4YbMZPhTCB', isSigned: true, name: 'Keeper', role: 'keeper' },
+      { id: 'did:key:z6Mkj28A9Xq1bK9Fm7s3L0v4Yp6Z1w2E8uT5rN4cQ7vB', isSigned: true, name: 'Observer', role: 'worker' },
+      { id: 'did:key:z6Mkp94B7Vc3mN8L1s5K0w2Yq4Z6x1E9uT3rP7cQ2vA', isSigned: true, name: 'Courier', role: 'worker' },
+      { id: 'did:key:z6Mkq15C8Wd4nO9M2t6L1x3Zr5A7y2F0vU4sQ8dR3wB', isSigned: true, name: 'Audit', role: 'worker' },
+      { id: 'did:key:z6Mkr26D9Xe5oP0N3u7M2y4As6B8z3G1wV5tR9eS4xC', isSigned: true, name: 'Builder', role: 'worker' },
+      { id: 'did:key:z6Mks37E0Yf6pQ1O4v8N3z5Bt7C9a4H2xW6uS0fT5yD', isSigned: true, name: 'Scout', role: 'scout' },
+      { id: 'did:key:z6Mkt48F1Zg7qR2P5w9O4a6Cu8D0b5I3yX7vT1gU6zE', isSigned: true, name: 'Validator', role: 'worker' },
+      { id: 'did:key:z6Mku59G2ah8rS3Q6x0P5b7Dv9E1c6J4zY8wU2hV7aF', isSigned: true, name: 'Tracker', role: 'trader' },
+      { id: '~trader', isSigned: false, name: '~trader', role: 'trader' },
+      { id: '~fan', isSigned: false, name: '~fan', role: 'scout' },
+      { id: '~cypher', isSigned: false, name: '~cypher', role: 'scout' },
+      { id: '~speedy', isSigned: false, name: '~speedy', role: 'worker' }
     ];
 
     for (let i = 1; i <= 14; i++) {
       const isSig = i % 2 === 0;
-      const fakeDid = isSig ? `did:key:z6Mk${Math.random().toString(36).substring(2, 10)}...` : `~agent_${i}`;
+      const fakeDid = isSig ? `did:key:z6Mk${Math.random().toString(36).substring(2, 8)}` : `~bot${i}`;
       initialAgents.push({
         id: fakeDid,
         isSigned: isSig,
-        name: isSig ? `Agent-z6Mk…${i}` : `~guest_${i}`,
+        name: isSig ? `z6Mk${i}` : `~bot${i}`,
         role: i % 3 === 0 ? 'worker' : 'scout'
       });
     }
@@ -457,9 +517,7 @@ class IsometricCity {
   addDiscoveredRoom(roomName) {
     if (this.buildings.some(b => b.name === roomName)) return;
 
-    // Keep building count bounded to prevent lag
     if (this.buildings.length >= this.maxBuildings) {
-      // Find oldest non-landmark building and replace
       const nonLandmarkIdx = this.buildings.findIndex(b => !b.isLandmark);
       if (nonLandmarkIdx !== -1) {
         this.buildings.splice(nonLandmarkIdx, 1);
@@ -491,7 +549,7 @@ class IsometricCity {
       color: isMailbox ? '#881337' : isEphemeral ? '#9a3412' : '#312e81',
       accentColor: isMailbox ? '#e11d48' : isEphemeral ? '#ea580c' : '#4f46e5',
       neonGlow: isMailbox ? '#f43f5e' : '#818cf8',
-      label: `#${roomName}`,
+      label: `#${roomName.length > 10 ? roomName.slice(0, 8) + '..' : roomName}`,
       description: `Public Room (${roomName})`,
       msgs: 1
     };
@@ -502,7 +560,7 @@ class IsometricCity {
   }
 
   spawnPortalBeam(gx, gy, color) {
-    if (this.particles.length > 40) return; // Bound particles
+    if (this.particles.length > 40) return;
     for (let i = 0; i < 15; i++) {
       this.particles.push({
         gx: gx + (Math.random() - 0.5) * 0.4,
@@ -524,7 +582,6 @@ class IsometricCity {
 
     let agent = this.agents.get(sender);
     if (!agent) {
-      // If agent pool is saturated, evict oldest non-keeper agent to prevent freeze
       if (this.agents.size >= this.maxAgents) {
         for (const [key, a] of this.agents.entries()) {
           if (a.role !== 'keeper' && !a.speechBubble) {
@@ -540,13 +597,21 @@ class IsometricCity {
     agent.msgCount++;
     if (isSigned) agent.signedCount++;
 
-    const targetBldg = this.buildings.find(b => b.name === roomName) || this.buildings[0];
-    if (targetBldg) {
-      targetBldg.msgs = (targetBldg.msgs || 0) + 1;
-      agent.insideBuilding = targetBldg;
-      agent.state = 'going_to_door';
-      agent.targetGridX = targetBldg.doorGx;
-      agent.targetGridY = targetBldg.doorGy;
+    // Only randomly send some agents to the room door to avoid all agents stacking on lobby
+    if (Math.random() < 0.4) {
+      const targetBldg = this.buildings.find(b => b.name === roomName) || this.buildings[0];
+      if (targetBldg) {
+        targetBldg.msgs = (targetBldg.msgs || 0) + 1;
+        agent.insideBuilding = targetBldg;
+        agent.state = 'going_to_door';
+        agent.targetGridX = targetBldg.doorGx;
+        agent.targetGridY = targetBldg.doorGy;
+      }
+    } else {
+      // Disperse to open district waypoint
+      const wp = this.getRandomDistrictWaypoint();
+      agent.targetGridX = wp.gx;
+      agent.targetGridY = wp.gy;
     }
 
     // Orchestrate speech
@@ -604,7 +669,6 @@ class IsometricCity {
       for (const agent of this.agents.values()) {
         if (agent.opacity < 0.2) continue;
 
-        // Check speech bubble hover
         if (agent.bubbleBounds) {
           const b = agent.bubbleBounds;
           if (mx >= b.bx && mx <= b.bx + b.bw && my >= b.by && my <= b.by + b.bh) {
@@ -614,7 +678,6 @@ class IsometricCity {
           }
         }
 
-        // Check agent avatar hover
         const pos = this.isoToScreen(agent.gridX, agent.gridY);
         if (Math.hypot(mx - pos.x, my - (pos.y - 18 * this.scale)) < 24 * this.scale) {
           isHoveringInteractive = true;
@@ -653,7 +716,7 @@ class IsometricCity {
 
       let found = null;
 
-      // 1. Check Speech Bubbles directly (highest click priority)
+      // 1. Direct Speech Bubble click
       for (const agent of this.agents.values()) {
         if (agent.bubbleBounds) {
           const b = agent.bubbleBounds;
@@ -664,12 +727,11 @@ class IsometricCity {
         }
       }
 
-      // 2. Check Agent Figures
+      // 2. Direct Agent figure click
       if (!found) {
         for (const agent of this.agents.values()) {
           if (agent.opacity < 0.2) continue;
           const pos = this.isoToScreen(agent.gridX, agent.gridY);
-          // Generous hit box covering full avatar
           if (Math.hypot(clickX - pos.x, clickY - (pos.y - 20 * this.scale)) < 26 * this.scale) {
             found = { type: 'agent', entity: agent };
             break;
@@ -677,7 +739,7 @@ class IsometricCity {
         }
       }
 
-      // 3. Check Buildings
+      // 3. Building click
       if (!found) {
         for (const bldg of this.buildings) {
           const pos = this.isoToScreen(bldg.gx + bldg.width / 2, bldg.gy + bldg.height / 2);
@@ -886,13 +948,30 @@ class IsometricCity {
       this.ctx.stroke();
     }
 
-    // Name Tag
-    this.ctx.font = `bold ${Math.max(8, 9 * this.scale)}px 'Fira Code', monospace`;
-    this.ctx.textAlign = 'center';
-    this.ctx.fillStyle = agent.isSigned ? '#38bdf8' : '#94a3b8';
-    this.ctx.fillText(agent.name, x, y - 31 * s + bob);
+    // Ultra-compact 16-bit Badge Label (always shown, zero overlap)
+    const isHovered = this.hoveredAgent === agent;
+    const badgeText = isHovered ? agent.fullName.slice(0, 12) : agent.shortBadge;
+    this.ctx.font = `bold ${Math.max(7, 8 * this.scale)}px 'Fira Code', monospace`;
+    const bTextWidth = this.ctx.measureText(badgeText).width;
+    const bgW = bTextWidth + 6 * this.scale;
+    const bgH = 11 * this.scale;
+    const bgX = x - bgW / 2;
+    const bgY = y - 33 * s + bob;
 
-    // Speech Bubble with bounds caching for click detection
+    // Mini pill badge background
+    this.ctx.fillStyle = isHovered ? 'rgba(15, 23, 42, 0.95)' : 'rgba(2, 6, 23, 0.75)';
+    this.ctx.strokeStyle = isHovered ? '#38bdf8' : agent.isSigned ? 'rgba(0, 242, 254, 0.6)' : 'rgba(100, 116, 139, 0.4)';
+    this.ctx.lineWidth = 1;
+    this.ctx.beginPath();
+    this.ctx.roundRect(bgX, bgY, bgW, bgH, 3);
+    this.ctx.fill();
+    this.ctx.stroke();
+
+    this.ctx.textAlign = 'center';
+    this.ctx.fillStyle = isHovered ? '#38bdf8' : agent.isSigned ? '#22d3ee' : '#94a3b8';
+    this.ctx.fillText(badgeText, x, bgY + 8.5 * this.scale);
+
+    // Speech Bubble with precise bounds caching for direct clicking
     if (agent.speechBubble) {
       const bubbleText = agent.speechBubble.text;
       this.ctx.font = `${Math.max(9, 10 * this.scale)}px 'Fira Code', monospace`;
@@ -900,14 +979,10 @@ class IsometricCity {
       const bw = textWidth + 16 * this.scale;
       const bh = 20 * this.scale;
       const bx = x - bw / 2;
-      const by = y - 48 * s + bob;
+      const by = y - 50 * s + bob;
 
-      // Cache bounds for click/hover
       agent.bubbleBounds = { bx, by, bw, bh };
 
-      const isHovered = this.hoveredAgent === agent;
-
-      // Card Background
       this.ctx.fillStyle = isHovered ? 'rgba(15, 23, 42, 0.98)' : 'rgba(10, 15, 26, 0.96)';
       this.ctx.strokeStyle = isHovered ? '#38bdf8' : agent.isSigned ? '#00f2fe' : '#64748b';
       this.ctx.shadowColor = agent.isSigned ? '#00f2fe' : 'transparent';
@@ -918,14 +993,12 @@ class IsometricCity {
       this.ctx.fill();
       this.ctx.stroke();
 
-      // Tail
       this.ctx.beginPath();
       this.ctx.moveTo(x - 3 * this.scale, by + bh);
       this.ctx.lineTo(x, by + bh + 5 * this.scale);
       this.ctx.lineTo(x + 3 * this.scale, by + bh);
       this.ctx.fill();
 
-      // Text
       this.ctx.fillStyle = isHovered ? '#38bdf8' : '#f8fafc';
       this.ctx.shadowBlur = 0;
       this.ctx.fillText(bubbleText, x, by + 13.5 * this.scale);
